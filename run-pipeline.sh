@@ -38,7 +38,7 @@ echo ""
 
 # Check for shellcode files
 log "Checking for shellcode files..."
-REQUIRED_FILES=("https_x64.bin" "https_x86.bin" "https.64.exe")
+REQUIRED_FILES=("https_x64.bin" "https_x86.bin" "https_x64.exe")
 MISSING_FILES=()
 
 for file in "${REQUIRED_FILES[@]}"; do
