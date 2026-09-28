@@ -1,5 +1,7 @@
 # Payload Pipeline
 
+This is a first attempt at automating payload generation with a C2 for testing AV/EDR security controls. I have expanded it into other containers and CI/CD flows so this is now public, can't promise that any of it works but the intent is to containerize all payload evasion/obfuscation techniques for easy grab and run.
+
 ## Prerequisites
 
 - Docker
